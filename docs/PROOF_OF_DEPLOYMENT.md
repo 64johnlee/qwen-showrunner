@@ -41,12 +41,10 @@ requests.post(f"{config.NATIVE_BASE}/services/aigc/multimodal-generation/generat
 
 ## 4. Workbench screenshot
 
-`docs/qwen-workbench-proof.png` — a screenshot of the Qwen Cloud / Model Studio
-console showing the active account and free-tier model quotas.
-
-> **TODO (user):** capture this screenshot from https://home.qwencloud.com while
-> logged in and save it here as `qwen-workbench-proof.png`, then attach it to the
-> Devpost submission's deployment-proof field.
+[`qwen-workbench-proof.png`](qwen-workbench-proof.png) — a screenshot of the
+authenticated Qwen Cloud / Model Studio console (captured 2026-07-03) showing the
+active account, the LLM free-tier quota table (qwen-plus / qwen-flash / qwen-vl-max),
+and 246 eligible free-quota models valid through 2026-09-01.
 
 ## 5. Reproduce
 
