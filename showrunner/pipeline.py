@@ -6,6 +6,7 @@ the optional `on_event` callback so a live dashboard (or the CLI) can narrate it
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from pathlib import Path
@@ -23,10 +24,16 @@ def _emit(on_event: Event | None, stage: str, **data) -> None:
 
 
 def _slug(text: str) -> str:
-    return re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:40] or "episode"
+    base = re.sub(r"[^a-z0-9]+", "-", text.lower()).strip("-")[:40]
+    if base:
+        return base
+    # non-ASCII titles (e.g. 中文) strip to nothing — a stable hash keeps
+    # each episode in its own directory instead of overwriting "episode/"
+    return f"episode-{hashlib.md5(text.encode('utf-8')).hexdigest()[:8]}"
 
 
-def produce_episode(premise: str, language: str = "en", num_scenes: int = 3,
+def produce_episode(premise: str, language: str = "en",
+                    num_scenes: int = config.DEFAULT_SHOTS,
                     out_root: Path | None = None, fast: bool = False,
                     subtitle_lang: str = "en", on_event: Event | None = None) -> dict:
     """Run the full pipeline and return a result dict with the episode path."""
@@ -36,8 +43,18 @@ def produce_episode(premise: str, language: str = "en", num_scenes: int = 3,
     # 1) SCRIPT ------------------------------------------------------------
     _emit(on_event, "script_start", premise=premise, language=language, shots=num_scenes)
     script = script_writer.write_script(premise, language, num_scenes, subtitle_lang)
-    ep_dir = out_root / _slug(script["title"])
-    ep_dir.mkdir(parents=True, exist_ok=True)
+    base = _slug(script["title"])
+    ep_dir = out_root / base
+    serial = 1
+    while True:
+        try:
+            ep_dir.mkdir(parents=True, exist_ok=False)
+            break
+        except FileExistsError:
+            # never reuse a dir — concurrent or repeated runs landing on the
+            # same title would clobber each other's shots mid-production
+            serial += 1
+            ep_dir = out_root / f"{base}-{serial}"
     (ep_dir / "script.json").write_text(
         json.dumps(script, ensure_ascii=False, indent=2), encoding="utf-8")
     _emit(on_event, "script_done", title=script["title"],
@@ -46,7 +63,15 @@ def produce_episode(premise: str, language: str = "en", num_scenes: int = 3,
           scenes=[{"id": s["id"], "speaker": s["speaker"], "line": s["line"],
                    "subtitle": s["subtitle"]} for s in script["scenes"]])
 
-    # 2) PRODUCE each scene: video + voice -> assembled clip ---------------
+    # 2) PRODUCE: submit every Wan shot up-front so they render in parallel,
+    #    then finish each scene (await video -> voice -> cut) in order ------
+    video_tasks: dict[int, str] = {}
+    for scene in script["scenes"]:
+        video_tasks[scene["id"]] = qc.submit_video(
+            scene["shot_prompt"], size=config.VIDEO_SIZE, model=video_model)
+        _emit(on_event, "video_submitted", id=scene["id"],
+              total=len(script["scenes"]))
+
     clips: list[Path] = []
     for scene in script["scenes"]:
         sid = scene["id"]
@@ -54,8 +79,7 @@ def produce_episode(premise: str, language: str = "en", num_scenes: int = 3,
               shot=scene["shot_prompt"], line=scene["line"])
 
         video_path = ep_dir / f"scene{sid}.mp4"
-        qc.generate_video(scene["shot_prompt"], video_path,
-                          size=config.VIDEO_SIZE, model=video_model)
+        qc.await_video(video_tasks[sid], video_path)
         _emit(on_event, "video_done", id=sid, file=str(video_path))
 
         voice_path = ep_dir / f"scene{sid}.wav"

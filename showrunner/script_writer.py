@@ -28,8 +28,9 @@ PREMISE: {premise}
 Spoken language: {language} (write every `line` in this language).
 Subtitle language: {subtitle_lang} (write every `subtitle` in this language; if it
 differs from the spoken language, make it a faithful, natural translation of the line).
-Setting should feel specific and real. Give it a strong hook in shot 1 and a
-cliffhanger in the final shot.
+Setting should feel specific and real. Give it a strong hook in shot 1, escalate
+the stakes every 2-3 shots with a clear twist midway, and end the final shot on
+a cliffhanger.
 
 Return ONLY this JSON object:
 {{
@@ -68,6 +69,10 @@ def _validate(script: dict, num_scenes: int) -> dict:
     scenes = script["scenes"]
     if not isinstance(scenes, list) or not scenes:
         raise ValueError("script has no scenes")
+    if len(scenes) > num_scenes:
+        # model over-delivered — trim so we don't burn quota on extra shots
+        scenes = scenes[:num_scenes]
+        script["scenes"] = scenes
 
     for i, scene in enumerate(scenes, 1):
         for field in ("shot_prompt", "speaker", "line"):

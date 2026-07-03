@@ -46,6 +46,9 @@ MODELS = {
 }
 
 # --- generation defaults ---
+# Wan free-tier clips are fixed ~5s (duration customization rejected, probed
+# 2026-07-03), so episode length is controlled by shot count: ~10 shots ≈ 1 min.
+DEFAULT_SHOTS = int(os.getenv("SHOWRUNNER_SHOTS", "10"))
 VIDEO_SIZE = os.getenv("SHOWRUNNER_VIDEO_SIZE", "480*832")   # 9:16 vertical short-drama (Wan-confirmed)
 IMAGE_SIZE = os.getenv("SHOWRUNNER_IMAGE_SIZE", "720*1280")  # 9:16 storyboard
 TTS_VOICE = os.getenv("SHOWRUNNER_TTS_VOICE", "Cherry")

@@ -43,7 +43,16 @@ def _duration(path: Path) -> float:
 
 
 def _wrap(text: str, width: int = 22) -> str:
-    """Naive word-wrap so drawtext (which has no auto-wrap) stays on screen."""
+    """Naive word-wrap so drawtext (which has no auto-wrap) stays on screen.
+
+    CJK subtitles have no spaces, so space-splitting can't wrap them —
+    fall back to fixed-length chunks (CJK glyphs are ~2x as wide).
+    """
+    if " " not in text.strip():
+        chunk = max(1, width // 2 + 2)
+        lines = [text[i:i + chunk] for i in range(0, len(text), chunk)]
+        return "\n".join(lines) if lines else text
+
     words, lines, cur = text.split(), [], ""
     for w in words:
         if len(cur) + len(w) + 1 > width and cur:

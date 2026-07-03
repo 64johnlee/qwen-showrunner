@@ -61,11 +61,23 @@ def _run_job(job_id: str, params: dict) -> None:
         q.put(None)
 
 
+MAX_SHOTS = 12  # cap so a bad request can't burn the free-tier quota (12 ≈ 70s)
+
+
 @app.post("/produce")
 async def produce(req: Request):
-    params = await req.json()
-    if not params.get("premise"):
+    try:
+        params = await req.json()
+    except Exception:
+        return JSONResponse({"error": "invalid JSON body"}, status_code=400)
+    premise = str(params.get("premise") or "").strip()
+    if not premise:
         return JSONResponse({"error": "premise required"}, status_code=400)
+    try:
+        shots = int(params.get("shots", 3))
+    except (TypeError, ValueError):
+        return JSONResponse({"error": "shots must be an integer"}, status_code=400)
+    params = {**params, "premise": premise, "shots": max(1, min(shots, MAX_SHOTS))}
     job_id = uuid.uuid4().hex[:12]
     _jobs[job_id] = queue.Queue()
     threading.Thread(target=_run_job, args=(job_id, params), daemon=True).start()
@@ -192,7 +204,7 @@ _HTML = """<!doctype html>
       </div>
       <div class="row">
         <div><label>Shots</label>
-          <select id="shots"><option>2</option><option selected>3</option><option>4</option><option>5</option></select></div>
+          <select id="shots"><option>3</option><option>6</option><option selected>10</option><option>12</option></select></div>
         <div><label>Quality</label>
           <select id="fast"><option value="false">Wan-Plus (HQ)</option><option value="true">Turbo (fast)</option></select></div>
       </div>
@@ -217,14 +229,15 @@ _HTML = """<!doctype html>
 </div>
 <script>
 const $=id=>document.getElementById(id);
-const log=(m,gold)=>{const l=$('log');l.innerHTML+=(gold?`<b>${m}</b>`:m)+'<br>';l.scrollTop=l.scrollHeight;};
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const log=(m,gold)=>{const l=$('log');l.innerHTML+=(gold?`<b>${esc(m)}</b>`:esc(m))+'<br>';l.scrollTop=l.scrollHeight;};
 const STEP={video:'🎬 shot',voice:'🎙 voice',assembled:'✂ cut'};
 function status(t,live){$('stext').textContent=t;$('sdot').classList.toggle('live',!!live);}
 function sceneCard(s){
   return `<div class="card" id="c${s.id}">
-    <div class="slate">${s.id}</div>
-    <div class="lines"><div class="who">${s.speaker||'Narrator'}</div>
-      <p class="spoken">${s.line}</p><p class="sub">${s.subtitle||''}</p></div>
+    <div class="slate">${esc(s.id)}</div>
+    <div class="lines"><div class="who">${esc(s.speaker||'Narrator')}</div>
+      <p class="spoken">${esc(s.line)}</p><p class="sub">${esc(s.subtitle||'')}</p></div>
     <div class="steps">
       <span class="step" data-k="video">${STEP.video}</span>
       <span class="step" data-k="voice">${STEP.voice}</span>
@@ -247,6 +260,7 @@ $('f').addEventListener('submit',async e=>{
   es.onmessage=ev=>{
     const {stage,data}=JSON.parse(ev.data);
     if(stage==='script_start'){status('✍️ Writing the script…',true);log('writing script ('+data.shots+' shots)');}
+    else if(stage==='video_submitted'){status(`🎥 Rolling cameras — shot ${data.id}/${data.total} submitted…`,true);}
     else if(stage==='script_done'){
       $('title').textContent=data.title;$('logline').textContent=data.logline;
       $('scenes').innerHTML=data.scenes.map(sceneCard).join('');

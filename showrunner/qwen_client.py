@@ -58,35 +58,62 @@ def chat(prompt: str, system: str | None = None, model: str | None = None,
 # --------------------------------------------------------------------------- #
 # Async job helpers (image + video)
 # --------------------------------------------------------------------------- #
+_SUBMIT_RETRIES = 3
+
+
 def _submit_async(path: str, model: str, inp: dict, params: dict) -> str:
-    resp = requests.post(
-        f"{config.NATIVE_BASE}/{path}",
-        headers=_headers(async_mode=True),
-        json={"model": model, "input": inp, "parameters": params},
-        timeout=60,
-    )
-    data = resp.json()
-    task_id = data.get("output", {}).get("task_id")
-    if not task_id:
-        raise QwenError(f"submit failed ({model}): {data.get('code')} {data.get('message', resp.text[:300])}")
-    return task_id
+    last_exc: Exception | None = None
+    for attempt in range(_SUBMIT_RETRIES):
+        try:
+            resp = requests.post(
+                f"{config.NATIVE_BASE}/{path}",
+                headers=_headers(async_mode=True),
+                json={"model": model, "input": inp, "parameters": params},
+                timeout=60,
+            )
+            data = resp.json()
+        except (requests.RequestException, ValueError) as exc:
+            # transient network/JSON hiccup — retry rather than abort a
+            # multi-minute episode over one dropped submit call
+            last_exc = exc
+            time.sleep(2 * (attempt + 1))
+            continue
+        task_id = data.get("output", {}).get("task_id")
+        if task_id:
+            return task_id
+        code = str(data.get("code") or "")
+        if "Throttling" in code and attempt < _SUBMIT_RETRIES - 1:
+            # rate-limited (parallel shot submits) — back off and retry
+            last_exc = QwenError(f"{code}: {data.get('message')}")
+            time.sleep(10 * (attempt + 1))
+            continue
+        raise QwenError(f"submit failed ({model}): {code} {data.get('message', resp.text[:300])}")
+    raise QwenError(f"submit failed ({model}) after {_SUBMIT_RETRIES} attempts: {last_exc}")
 
 
 def _poll(task_id: str) -> dict:
     deadline = time.time() + config.POLL_TIMEOUT_S
+    last_error = ""
     while time.time() < deadline:
-        resp = requests.get(
-            f"{config.NATIVE_BASE}/tasks/{task_id}",
-            headers=_headers(), timeout=60,
-        )
-        out = resp.json().get("output", {})
+        try:
+            resp = requests.get(
+                f"{config.NATIVE_BASE}/tasks/{task_id}",
+                headers=_headers(), timeout=60,
+            )
+            out = resp.json().get("output", {})
+        except (requests.RequestException, ValueError) as exc:
+            # transient network/JSON hiccup — keep polling until the deadline
+            last_error = str(exc)
+            time.sleep(config.POLL_INTERVAL_S)
+            continue
         status = out.get("task_status")
         if status == "SUCCEEDED":
             return out
         if status in ("FAILED", "CANCELED", "UNKNOWN"):
             raise QwenError(f"task {task_id} {status}: {out.get('message', out)}")
         time.sleep(config.POLL_INTERVAL_S)
-    raise QwenError(f"task {task_id} timed out after {config.POLL_TIMEOUT_S}s")
+    detail = f" (last error: {last_error})" if last_error else ""
+    raise QwenError(f"task {task_id} timed out after {config.POLL_TIMEOUT_S}s{detail}")
 
 
 def _download(url: str, dest: Path) -> Path:
@@ -122,20 +149,36 @@ def generate_image(prompt: str, dest: Path, size: str | None = None,
 # --------------------------------------------------------------------------- #
 # Video (Wan shots)
 # --------------------------------------------------------------------------- #
-def generate_video(prompt: str, dest: Path, size: str | None = None,
-                   model: str | None = None) -> tuple[Path, str]:
-    """Generate one video shot from a text prompt; save to `dest`. Returns (path, url)."""
-    task_id = _submit_async(
+def submit_video(prompt: str, size: str | None = None,
+                 model: str | None = None) -> str:
+    """Submit one Wan text-to-video job; returns its task_id immediately.
+
+    Submitting every shot up-front lets Wan render them in parallel — a
+    10-shot episode takes roughly one shot's wall-clock time, not ten.
+    """
+    return _submit_async(
         "services/aigc/video-generation/video-synthesis",
         model or config.MODELS["video"],
         {"prompt": prompt},
         {"size": size or config.VIDEO_SIZE},
     )
+
+
+def await_video(task_id: str, dest: Path) -> tuple[Path, str]:
+    """Wait for a submitted video job and save the result to `dest`."""
     out = _poll(task_id)
-    url = out.get("video_url") or out.get("results", {}).get("video_url")
+    results = out.get("results")
+    url = out.get("video_url") or (
+        results.get("video_url") if isinstance(results, dict) else None)
     if not url:
         raise QwenError(f"video job returned no url: {out}")
     return _download(url, dest), url
+
+
+def generate_video(prompt: str, dest: Path, size: str | None = None,
+                   model: str | None = None) -> tuple[Path, str]:
+    """Generate one video shot from a text prompt; save to `dest`. Returns (path, url)."""
+    return await_video(submit_video(prompt, size, model), dest)
 
 
 # --------------------------------------------------------------------------- #
