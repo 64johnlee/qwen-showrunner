@@ -1,6 +1,6 @@
 """FastAPI live-production dashboard for the Qwen Showrunner.
 
-Start:  python server.py   ->  http://127.0.0.1:8000
+Start:  python server.py   ->  http://127.0.0.1:8010 (override with PORT=)
 A premise is submitted to /produce, which runs the showrunner pipeline in a
 background thread; the browser watches progress over an SSE stream (/stream/{id})
 and plays the finished vertical episode in a phone frame.
@@ -286,4 +286,5 @@ $('f').addEventListener('submit',async e=>{
 
 
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    import os
+    uvicorn.run(app, host="127.0.0.1", port=int(os.getenv("PORT", "8010")))
