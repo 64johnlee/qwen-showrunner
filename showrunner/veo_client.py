@@ -24,6 +24,20 @@ class VeoError(RuntimeError):
     pass
 
 
+def _ref_b64(path: Path, max_side: int = 512) -> str:
+    """Downscale the cast photo to a small JPEG — a full-res PNG payload made
+    submit requests time out at the HTTP layer."""
+    import io
+
+    from PIL import Image
+
+    img = Image.open(path).convert("RGB")
+    img.thumbnail((max_side, max_side))
+    buf = io.BytesIO()
+    img.save(buf, "JPEG", quality=85)
+    return base64.b64encode(buf.getvalue()).decode()
+
+
 def _access_token(force: bool = False) -> str:
     if force or not _TOKEN["value"] or time.time() - _TOKEN["ts"] > 1800:
         proc = subprocess.run(
@@ -37,11 +51,17 @@ def _access_token(force: bool = False) -> str:
     return _TOKEN["value"]
 
 
-def _model_base() -> str:
+def _host(location: str) -> str:
+    return ("aiplatform.googleapis.com" if location == "global"
+            else f"{location}-aiplatform.googleapis.com")
+
+
+def _model_base(model: str | None = None) -> str:
+    loc = config.VEO_LOCATION
     return (
-        f"https://{config.GCP_REGION}-aiplatform.googleapis.com/v1/projects/"
-        f"{config.GCP_PROJECT}/locations/{config.GCP_REGION}"
-        f"/publishers/google/models/{config.VEO_MODEL}"
+        f"https://{_host(loc)}/v1/projects/"
+        f"{config.GCP_PROJECT}/locations/{loc}"
+        f"/publishers/google/models/{model or config.VEO_MODEL}"
     )
 
 
@@ -69,13 +89,30 @@ def _post(url: str, body: dict) -> dict:
     raise VeoError(f"Veo API rate-limited after {8 * 30}s of backoff: {last}")
 
 
-def submit_video(prompt: str) -> str:
-    """Submit one Veo shot; returns the long-running operation name."""
-    data = _post(f"{_model_base()}:predictLongRunning", {
-        "instances": [{"prompt": prompt}],
+def submit_video(prompt: str, reference_path: Path | None = None) -> str:
+    """Submit one Veo shot; returns the long-running operation name.
+
+    With `reference_path`, the cast photo is attached as a Veo 3.1 reference
+    image ("asset") so the protagonist keeps the same face in every shot.
+    """
+    instance: dict = {"prompt": prompt}
+    model = config.VEO_MODEL
+    duration = config.VEO_DURATION_S
+    if reference_path is not None:
+        model = config.VEO_REF_MODEL
+        duration = 8   # reference_to_video only supports 8s (API-enforced)
+        instance["referenceImages"] = [{
+            "image": {
+                "bytesBase64Encoded": _ref_b64(reference_path),
+                "mimeType": "image/jpeg",
+            },
+            "referenceType": "asset",
+        }]
+    data = _post(f"{_model_base(model)}:predictLongRunning", {
+        "instances": [instance],
         "parameters": {
             "aspectRatio": "9:16",
-            "durationSeconds": config.VEO_DURATION_S,
+            "durationSeconds": duration,
             "sampleCount": 1,
         },
     })
@@ -87,10 +124,15 @@ def submit_video(prompt: str) -> str:
 
 def await_video(operation_name: str, dest: Path) -> tuple[Path, str]:
     """Poll a Veo operation and save the resulting mp4 to `dest`."""
+    # fetchPredictOperation must be called on the model AND location that own
+    # the operation — both are encoded in the operation name's prefix.
+    model_path = operation_name.split("/operations/")[0]
+    op_location = operation_name.split("/locations/")[1].split("/")[0]
+    fetch_url = (f"https://{_host(op_location)}/v1/"
+                 f"{model_path}:fetchPredictOperation")
     deadline = time.time() + config.POLL_TIMEOUT_S
     while time.time() < deadline:
-        data = _post(f"{_model_base()}:fetchPredictOperation",
-                     {"operationName": operation_name})
+        data = _post(fetch_url, {"operationName": operation_name})
         if data.get("done"):
             if "error" in data:
                 raise VeoError(f"Veo render failed: {str(data['error'])[:300]}")

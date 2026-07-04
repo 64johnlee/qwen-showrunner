@@ -38,15 +38,26 @@ def _safe_prompt(shot_prompt: str) -> str:
         return shot_prompt
 
 
-def _rerender_shot(shot_prompt: str, video_path: Path) -> None:
-    """Fallback ladder for one failed shot: safe-rewritten Veo, then the wan chain."""
+def _rerender_shot(shot_prompt: str, video_path: Path,
+                   cast_path: Path | None = None,
+                   cast_url: str | None = None) -> None:
+    """Fallback ladder for one failed shot: safe-rewritten Veo (keeping the
+    cast reference), then the wan reference chain, then the plain wan chain."""
     try:
         veo_client.await_video(
-            veo_client.submit_video(_safe_prompt(shot_prompt)), video_path)
+            veo_client.submit_video(_safe_prompt(shot_prompt),
+                                    reference_path=cast_path), video_path)
         return
     except veo_client.VeoError:
         pass
-    # last resort: whatever free wan seconds remain
+    if cast_url:
+        try:
+            qc.await_video(qc.submit_video_ref_wan(shot_prompt, cast_url),
+                           video_path)
+            return
+        except qc.QwenError:
+            pass
+    # last resort: whatever free wan seconds remain (no face lock)
     qc.await_video(qc.submit_video_wan(shot_prompt, size=config.VIDEO_SIZE),
                    video_path)
 
@@ -93,10 +104,30 @@ def produce_episode(premise: str, language: str = "en",
 
     # 2) PRODUCE: submit every Wan shot up-front so they render in parallel,
     #    then finish each scene (await video -> voice -> cut) in order ------
+    # CAST stage: lock the protagonist's face — generate one cast photo from
+    # protagonist_anchor and render every shot with it as a reference image.
+    cast_path: Path | None = None
+    cast_url: str | None = None
+    anchor = script.get("protagonist_anchor", "")
+    if config.CAST_MODE and anchor and config.VIDEO_BACKEND != "qwen":
+        try:
+            cast_path = ep_dir / "cast.png"
+            _, cast_url = qc.generate_image(
+                f"电影定妆照：{anchor}。正面半身，写实风格，中性表情，简洁背景",
+                cast_path)
+            _emit(on_event, "cast_done", file=str(cast_path))
+        except Exception as exc:   # casting is an enhancement, not a hard dep
+            cast_path = cast_url = None
+            _emit(on_event, "cast_failed", reason=str(exc)[:120])
+
     video_tasks: dict[int, str] = {}
     for scene in script["scenes"]:
-        video_tasks[scene["id"]] = qc.submit_video(
-            scene["shot_prompt"], size=config.VIDEO_SIZE, model=video_model)
+        if cast_path is not None:
+            video_tasks[scene["id"]] = veo_client.submit_video(
+                scene["shot_prompt"], reference_path=cast_path)
+        else:
+            video_tasks[scene["id"]] = qc.submit_video(
+                scene["shot_prompt"], size=config.VIDEO_SIZE, model=video_model)
         _emit(on_event, "video_submitted", id=scene["id"],
               total=len(script["scenes"]))
 
@@ -115,7 +146,8 @@ def produce_episode(premise: str, language: str = "en",
             if config.VIDEO_BACKEND == "qwen":
                 raise
             _emit(on_event, "video_retry", id=sid, reason=str(exc)[:120])
-            _rerender_shot(scene["shot_prompt"], video_path)
+            _rerender_shot(scene["shot_prompt"], video_path,
+                           cast_path=cast_path, cast_url=cast_url)
         _emit(on_event, "video_done", id=sid, file=str(video_path))
 
         voice_path = ep_dir / f"scene{sid}.wav"

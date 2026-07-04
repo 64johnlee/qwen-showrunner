@@ -169,6 +169,30 @@ def submit_video(prompt: str, size: str | None = None,
         raise
 
 
+def submit_video_ref_wan(prompt: str, image_url: str) -> str:
+    """Submit a face-locked shot on the wan reference-to-video chain.
+
+    `media` format probed live 2026-07-04: a list of typed objects; valid
+    types are reference_image / reference_video / first_frame.
+    """
+    last: QwenError | None = None
+    for m in config.WAN_REF_MODELS:
+        try:
+            return _submit_async(
+                "services/aigc/video-generation/video-synthesis",
+                m,
+                {"prompt": prompt,
+                 "media": [{"type": "reference_image", "url": image_url}]},
+                {},
+            )
+        except QwenError as exc:
+            if "AllocationQuota" in str(exc):
+                last = exc
+                continue
+            raise
+    raise QwenError(f"all wan reference-to-video models out of free quota: {last}")
+
+
 def submit_video_wan(prompt: str, size: str | None = None,
                      model: str | None = None) -> str:
     """Submit on the free wan chain only (no Veo) — also the last-resort path."""

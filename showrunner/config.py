@@ -61,7 +61,19 @@ VIDEO_BACKEND = os.getenv("SHOWRUNNER_VIDEO_BACKEND", "veo")
 VEO_MODEL = os.getenv("SHOWRUNNER_VEO_MODEL", "veo-3.0-fast-generate-001")
 GCP_PROJECT = os.getenv("GCP_PROJECT", "disco-module-487411-m0")
 GCP_REGION = os.getenv("GCP_REGION", "us-central1")
+# Veo serves from the global endpoint too — and when a regional pool is
+# saturated (us-central1 429'd for 30+ min on 2026-07-04) global still has
+# capacity, so it is the default.
+VEO_LOCATION = os.getenv("SHOWRUNNER_VEO_LOCATION", "global")
 VEO_DURATION_S = int(os.getenv("SHOWRUNNER_VEO_DURATION", "6"))   # veo-3 accepts 4/6/8
+
+# --- cast mode: lock the protagonist's face across shots ---
+# Generate a cast photo from protagonist_anchor, then render every shot with it
+# as a reference image (Veo 3.1 referenceImages / wan2.7-r2v reference_image).
+CAST_MODE = os.getenv("SHOWRUNNER_CAST", "1") not in ("0", "false", "no")
+VEO_REF_MODEL = os.getenv("SHOWRUNNER_VEO_REF_MODEL", "veo-3.1-fast-generate-001")
+WAN_REF_MODELS = [s.strip() for s in os.getenv(
+    "SHOWRUNNER_WAN_REF_MODELS", "wan2.7-r2v,happyhorse-1.1-r2v").split(",") if s.strip()]
 
 # --- generation defaults ---
 # Wan free-tier clips are fixed ~5s (duration customization rejected, probed
