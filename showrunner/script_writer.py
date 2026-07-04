@@ -29,39 +29,49 @@ Spoken language: {language} (write every `line` in this language).
 Subtitle language: {subtitle_lang} (write every `subtitle` in this language; if it
 differs from the spoken language, make it a faithful, natural translation of the line).
 
-STORY DISCIPLINE — ONE CENTRAL POINT:
-First decide the single central moment of this episode (ONE twist, reveal, or
-emotional payoff — e.g. "the cleaner everyone humiliated is the majority
-shareholder"). In under a minute you can only land ONE point. Every scene must
-serve it: shots 1-2 plant the question, the middle shots escalate pressure on
-that same question (no side plots, no second twist), and the final two shots
-detonate the central moment and hold on its aftermath. If a scene does not
-build toward the central moment, replace it with one that does.
+STORY DISCIPLINE — ONE CONTINUOUS MOMENT, ONE CENTRAL POINT:
+The whole episode covers ONE continuous moment of story time — roughly ten
+seconds of real events in a SINGLE location, unfolded in fine detail beat by
+beat, like one film sequence cut into consecutive shots. No time jumps, no
+location changes, no flashbacks, no montage. Decide the single central point
+(ONE twist, reveal, or emotional payoff) and make the beats march straight at
+it: the first shots plant the question, each following shot tightens the same
+screw a little more, and the final two shots detonate the point and hold on
+its aftermath. If a beat does not push toward the central point, cut it.
 
-NARRATION STYLE — VOICE-OVER, NOT LIP-SYNCED DIALOGUE:
-Every `line` is VOICE-OVER narration (first-person inner monologue or a
-storyteller's voice), never on-camera speech — generated video cannot lip-sync.
-Therefore every `shot_prompt` must be a rich CINEMATIC shot where nobody is
-seen talking: favour LONG SHOTS and WIDE establishing shots, tracking/dolly
-moves, characters seen from behind, in silhouette, in profile at a distance,
-plus occasional close-up inserts of hands/objects/details. Bodies act, faces
-react silently — mouths never move as if speaking. Vary the shot grammar
-across the episode (wide -> tracking -> insert -> slow push-in).
+CHARACTER & SCENE LOCK (the video model has NO memory between shots):
+Create exactly ONE protagonist. Write one reusable sentence that pins their
+look — age, build, hair, exact clothing, one distinctive prop (e.g. "a
+50-year-old woman in a worn blue cleaner's uniform, grey-streaked bun, faded
+red brooch") — put it in `protagonist_anchor`. Pin the place the same way in
+`location_anchor`. EVERY shot_prompt MUST begin by repeating BOTH anchors
+WORD-FOR-WORD, then add only that shot's new beat. Other people stay distant,
+from behind, or blurred — never a second recognizable face.
+
+VOICE-OVER — DRAMATIC, NOT LIP-SYNCED:
+Every `line` is VOICE-OVER (inner monologue or a storyteller), never
+on-camera speech — nobody in frame may be seen talking. Write the VO like a
+dramatic trailer narrator: short punchy sentences, rising tension, rhetorical
+questions, deliberate repetition ("她擦了十年地。十年。"), a gut-punch on the
+final line. Shots favour LONG/WIDE framing, tracking moves, silhouettes,
+close-up inserts of hands/objects; bodies act, faces react silently.
 
 Return ONLY this JSON object:
 {{
   "title": "short punchy title",
   "logline": "one sentence stating the central moment",
   "core_moment": "one sentence: the single point this episode lands",
+  "protagonist_anchor": "one reusable visual-lock sentence for the protagonist",
+  "location_anchor": "one reusable visual-lock sentence for the single location",
   "language": "{language}",
   "characters": [
     {{"name": "Name", "voice": "one of {voices}", "persona": "one line"}}
   ],
   "scenes": [
     {{
-      "shot_prompt": "vivid CINEMATIC VISUAL description for a text-to-video model: camera move, framing (favour long/wide), subject action, lighting, mood. Nobody visibly talking. No dialogue text here.",
+      "shot_prompt": "MUST start with protagonist_anchor + location_anchor word-for-word, then this beat's camera move, framing (favour long/wide), action, lighting. Nobody visibly talking. No dialogue text.",
       "speaker": "character name or Narrator",
-      "line": "the voice-over line for this shot, in {language}",
+      "line": "the dramatic voice-over line for this shot, in {language}",
       "subtitle": "the on-screen subtitle in {subtitle_lang} (translation of line if languages differ)"
     }}
   ]
