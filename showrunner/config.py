@@ -53,6 +53,15 @@ VIDEO_FALLBACKS = [s.strip() for s in os.getenv(
     "wan2.7-t2v,wan2.6-t2v,wan2.5-t2v-preview,wan2.1-t2v-turbo,happyhorse-1.1-t2v,wan2.2-t2v-plus",
 ).split(",") if s.strip()]
 
+# --- video backend ---
+# "auto": drain the free Qwen chain first, then fail over to Veo on GCP
+# free-trial credits. "qwen" / "veo" force a single backend.
+VIDEO_BACKEND = os.getenv("SHOWRUNNER_VIDEO_BACKEND", "auto")
+VEO_MODEL = os.getenv("SHOWRUNNER_VEO_MODEL", "veo-3.0-fast-generate-001")
+GCP_PROJECT = os.getenv("GCP_PROJECT", "disco-module-487411-m0")
+GCP_REGION = os.getenv("GCP_REGION", "us-central1")
+VEO_DURATION_S = int(os.getenv("SHOWRUNNER_VEO_DURATION", "6"))   # veo-3 accepts 4/6/8
+
 # --- generation defaults ---
 # Wan free-tier clips are fixed ~5s (duration customization rejected, probed
 # 2026-07-03), so episode length is controlled by shot count: ~10 shots ≈ 1 min.

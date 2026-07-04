@@ -156,18 +156,27 @@ def submit_video(prompt: str, size: str | None = None,
     Submitting every shot up-front lets Wan render them in parallel — a
     10-shot episode takes roughly one shot's wall-clock time, not ten.
     """
+    if config.VIDEO_BACKEND == "veo":
+        from . import veo_client
+        return veo_client.submit_video(prompt)
     chain = [model or config.MODELS["video"]]
     for m in config.VIDEO_FALLBACKS:
         if m not in chain:
             chain.append(m)
     last: QwenError | None = None
     for m in chain:
+        # only the wan2.1/2.2 generation accepts WxH sizes like 480*832; newer
+        # models reject it at render time ("size is not supported") — let them
+        # use their defaults, the assembler normalizes to 9:16 anyway.
+        params = {}
+        if m.startswith(("wan2.1", "wan2.2", "wanx2.0")):
+            params["size"] = size or config.VIDEO_SIZE
         try:
             return _submit_async(
                 "services/aigc/video-generation/video-synthesis",
                 m,
                 {"prompt": prompt},
-                {"size": size or config.VIDEO_SIZE},
+                params,
             )
         except QwenError as exc:
             # this model's free video seconds are gone — fall through to the next
@@ -175,6 +184,10 @@ def submit_video(prompt: str, size: str | None = None,
                 last = exc
                 continue
             raise
+    if config.VIDEO_BACKEND == "auto":
+        # Qwen free pool is dry — fail over to Veo on GCP credits
+        from . import veo_client
+        return veo_client.submit_video(prompt)
     raise QwenError(
         "every video model in the fallback chain is out of free quota — "
         f"redeem the hackathon coupon or wait for a reset. Last: {last}"
@@ -183,6 +196,9 @@ def submit_video(prompt: str, size: str | None = None,
 
 def await_video(task_id: str, dest: Path) -> tuple[Path, str]:
     """Wait for a submitted video job and save the result to `dest`."""
+    if task_id.startswith("projects/"):   # Veo long-running operation name
+        from . import veo_client
+        return veo_client.await_video(task_id, dest)
     out = _poll(task_id)
     results = out.get("results")
     url = out.get("video_url") or (
