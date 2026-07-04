@@ -45,7 +45,7 @@ episode and drives each stage, emitting live events consumed by the dashboard.
 | Stage | Model |
 |-------|-------|
 | Scriptwriting / direction | `qwen-max` |
-| Shot video generation | `wan2.2-t2v-plus` (HQ) / `wan2.1-t2v-turbo` (fast) |
+| Shot video generation | `wan2.7-t2v` (HQ, audio-capable) / `wan2.1-t2v-turbo` (fast) |
 | Character voices | `qwen3-tts-flash` |
 | Storyboard image (optional) | `wan2.2-t2i-flash` |
 

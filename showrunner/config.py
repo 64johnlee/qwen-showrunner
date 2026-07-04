@@ -40,7 +40,10 @@ MODELS = {
     "script": os.getenv("SHOWRUNNER_LLM", "qwen-max"),          # scriptwriting / director LLM
     "image": os.getenv("SHOWRUNNER_IMAGE", "wan2.2-t2i-flash"),  # storyboard frames (fast)
     "image_hq": "wan2.2-t2i-plus",                               # higher-quality storyboard
-    "video": os.getenv("SHOWRUNNER_VIDEO", "wan2.2-t2v-plus"),   # shot video (quality)
+    # wan2.2-t2v-plus free video-seconds exhausted 2026-07-04 (AllocationQuota.
+    # FreeTierOnly) — each Wan variant has its OWN free allowance, so default to
+    # the newest flagship; probe confirmed wan2.1/2.5/2.6/2.7 + happyhorse all OK.
+    "video": os.getenv("SHOWRUNNER_VIDEO", "wan2.7-t2v"),        # shot video (quality)
     "video_fast": "wan2.1-t2v-turbo",                            # shot video (fast)
     "tts": os.getenv("SHOWRUNNER_TTS", "qwen3-tts-flash"),       # character voices (sync only)
 }
