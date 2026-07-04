@@ -28,23 +28,40 @@ PREMISE: {premise}
 Spoken language: {language} (write every `line` in this language).
 Subtitle language: {subtitle_lang} (write every `subtitle` in this language; if it
 differs from the spoken language, make it a faithful, natural translation of the line).
-Setting should feel specific and real. Give it a strong hook in shot 1, escalate
-the stakes every 2-3 shots with a clear twist midway, and end the final shot on
-a cliffhanger.
+
+STORY DISCIPLINE — ONE CENTRAL POINT:
+First decide the single central moment of this episode (ONE twist, reveal, or
+emotional payoff — e.g. "the cleaner everyone humiliated is the majority
+shareholder"). In under a minute you can only land ONE point. Every scene must
+serve it: shots 1-2 plant the question, the middle shots escalate pressure on
+that same question (no side plots, no second twist), and the final two shots
+detonate the central moment and hold on its aftermath. If a scene does not
+build toward the central moment, replace it with one that does.
+
+NARRATION STYLE — VOICE-OVER, NOT LIP-SYNCED DIALOGUE:
+Every `line` is VOICE-OVER narration (first-person inner monologue or a
+storyteller's voice), never on-camera speech — generated video cannot lip-sync.
+Therefore every `shot_prompt` must be a rich CINEMATIC shot where nobody is
+seen talking: favour LONG SHOTS and WIDE establishing shots, tracking/dolly
+moves, characters seen from behind, in silhouette, in profile at a distance,
+plus occasional close-up inserts of hands/objects/details. Bodies act, faces
+react silently — mouths never move as if speaking. Vary the shot grammar
+across the episode (wide -> tracking -> insert -> slow push-in).
 
 Return ONLY this JSON object:
 {{
   "title": "short punchy title",
-  "logline": "one sentence",
+  "logline": "one sentence stating the central moment",
+  "core_moment": "one sentence: the single point this episode lands",
   "language": "{language}",
   "characters": [
     {{"name": "Name", "voice": "one of {voices}", "persona": "one line"}}
   ],
   "scenes": [
     {{
-      "shot_prompt": "a vivid CINEMATIC VISUAL description of this shot for a text-to-video model: camera, subject, action, lighting, mood. No dialogue text here.",
+      "shot_prompt": "vivid CINEMATIC VISUAL description for a text-to-video model: camera move, framing (favour long/wide), subject action, lighting, mood. Nobody visibly talking. No dialogue text here.",
       "speaker": "character name or Narrator",
-      "line": "the spoken dialogue for this shot, in {language}",
+      "line": "the voice-over line for this shot, in {language}",
       "subtitle": "the on-screen subtitle in {subtitle_lang} (translation of line if languages differ)"
     }}
   ]

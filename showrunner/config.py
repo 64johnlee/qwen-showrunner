@@ -54,9 +54,10 @@ VIDEO_FALLBACKS = [s.strip() for s in os.getenv(
 ).split(",") if s.strip()]
 
 # --- video backend ---
-# "auto": drain the free Qwen chain first, then fail over to Veo on GCP
-# free-trial credits. "qwen" / "veo" force a single backend.
-VIDEO_BACKEND = os.getenv("SHOWRUNNER_VIDEO_BACKEND", "auto")
+# "veo" (default): consistent Veo quality on GCP credits — the wan free-tier
+# leftovers produced visibly deformed shots mixed into episodes (owner review
+# 2026-07-04). "auto" drains the free Qwen chain first; "qwen" forces wan only.
+VIDEO_BACKEND = os.getenv("SHOWRUNNER_VIDEO_BACKEND", "veo")
 VEO_MODEL = os.getenv("SHOWRUNNER_VEO_MODEL", "veo-3.0-fast-generate-001")
 GCP_PROJECT = os.getenv("GCP_PROJECT", "disco-module-487411-m0")
 GCP_REGION = os.getenv("GCP_REGION", "us-central1")
