@@ -159,6 +159,19 @@ def submit_video(prompt: str, size: str | None = None,
     if config.VIDEO_BACKEND == "veo":
         from . import veo_client
         return veo_client.submit_video(prompt)
+    try:
+        return submit_video_wan(prompt, size, model)
+    except QwenError as exc:
+        if config.VIDEO_BACKEND == "auto" and "out of free quota" in str(exc):
+            # Qwen free pool is dry — fail over to Veo on GCP credits
+            from . import veo_client
+            return veo_client.submit_video(prompt)
+        raise
+
+
+def submit_video_wan(prompt: str, size: str | None = None,
+                     model: str | None = None) -> str:
+    """Submit on the free wan chain only (no Veo) — also the last-resort path."""
     chain = [model or config.MODELS["video"]]
     for m in config.VIDEO_FALLBACKS:
         if m not in chain:
@@ -184,10 +197,6 @@ def submit_video(prompt: str, size: str | None = None,
                 last = exc
                 continue
             raise
-    if config.VIDEO_BACKEND == "auto":
-        # Qwen free pool is dry — fail over to Veo on GCP credits
-        from . import veo_client
-        return veo_client.submit_video(prompt)
     raise QwenError(
         "every video model in the fallback chain is out of free quota — "
         f"redeem the hackathon coupon or wait for a reset. Last: {last}"

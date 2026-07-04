@@ -12,7 +12,7 @@ import re
 from pathlib import Path
 from typing import Callable
 
-from . import assembler, config, script_writer
+from . import assembler, config, script_writer, veo_client
 from . import qwen_client as qc
 
 Event = Callable[[str, dict], None]
@@ -21,6 +21,34 @@ Event = Callable[[str, dict], None]
 def _emit(on_event: Event | None, stage: str, **data) -> None:
     if on_event:
         on_event(stage, data)
+
+
+def _safe_prompt(shot_prompt: str) -> str:
+    """Rewrite a shot prompt that tripped the video model's safety filter."""
+    try:
+        out = qc.chat(
+            "This text-to-video prompt was blocked by an automated safety filter, "
+            "most likely over photoreal people. Rewrite it as a safe cinematic shot "
+            "that keeps the same story beat: show people only from far away, from "
+            "behind, or in silhouette — or replace them with an evocative detail of "
+            "the empty scene. Keep it under 60 words, same language as the input. "
+            f"Return ONLY the rewritten prompt.\n\nPROMPT: {shot_prompt}")
+        return (out or "").strip() or shot_prompt
+    except Exception:
+        return shot_prompt
+
+
+def _rerender_shot(shot_prompt: str, video_path: Path) -> None:
+    """Fallback ladder for one failed shot: safe-rewritten Veo, then the wan chain."""
+    try:
+        veo_client.await_video(
+            veo_client.submit_video(_safe_prompt(shot_prompt)), video_path)
+        return
+    except veo_client.VeoError:
+        pass
+    # last resort: whatever free wan seconds remain
+    qc.await_video(qc.submit_video_wan(shot_prompt, size=config.VIDEO_SIZE),
+                   video_path)
 
 
 def _slug(text: str) -> str:
@@ -81,15 +109,13 @@ def produce_episode(premise: str, language: str = "en",
         video_path = ep_dir / f"scene{sid}.mp4"
         try:
             qc.await_video(video_tasks[sid], video_path)
-        except qc.QwenError as exc:
-            # a free-chain wan shot failed or timed out in the render queue —
-            # re-render just this shot on Veo instead of killing the episode
+        except (qc.QwenError, veo_client.VeoError) as exc:
+            # a shot failed (wan queue timeout, Veo safety filter, …) —
+            # re-render just this shot instead of killing the episode
             if config.VIDEO_BACKEND == "qwen":
                 raise
             _emit(on_event, "video_retry", id=sid, reason=str(exc)[:120])
-            from . import veo_client
-            veo_client.await_video(veo_client.submit_video(scene["shot_prompt"]),
-                                   video_path)
+            _rerender_shot(scene["shot_prompt"], video_path)
         _emit(on_event, "video_done", id=sid, file=str(video_path))
 
         voice_path = ep_dir / f"scene{sid}.wav"

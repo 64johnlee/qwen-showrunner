@@ -89,6 +89,9 @@ def await_video(operation_name: str, dest: Path) -> tuple[Path, str]:
                 raise VeoError(f"Veo render failed: {str(data['error'])[:300]}")
             videos = data.get("response", {}).get("videos") or []
             if not videos:
+                rai = data.get("response", {}).get("raiMediaFilteredReasons")
+                if rai:
+                    raise VeoError(f"safety filter blocked this shot — rephrase it: {str(rai[0])[:160]}")
                 raise VeoError(f"Veo returned no videos: {str(data)[:200]}")
             v = videos[0]
             if v.get("bytesBase64Encoded"):
