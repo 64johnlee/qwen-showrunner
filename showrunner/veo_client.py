@@ -46,20 +46,27 @@ def _model_base() -> str:
 
 
 def _post(url: str, body: dict) -> dict:
-    for attempt in (1, 2):
+    last = ""
+    for attempt in range(8):
         resp = requests.post(
             url,
-            headers={"Authorization": f"Bearer {_access_token(force=attempt == 2)}",
+            headers={"Authorization": f"Bearer {_access_token(force=attempt > 0)}",
                      "Content-Type": "application/json"},
             json=body, timeout=60,
         )
-        if resp.status_code == 401 and attempt == 1:
-            continue   # stale token — refresh and retry once
+        if resp.status_code == 401 and attempt == 0:
+            continue   # stale token — refresh and retry
+        if resp.status_code == 429:
+            # concurrent long-running-request quota — a 10-shot parallel burst
+            # can exceed it; back off and let in-flight renders drain
+            last = resp.text[:200]
+            time.sleep(30)
+            continue
         data = resp.json()
         if resp.status_code >= 300:
             raise VeoError(f"Veo API {resp.status_code}: {str(data)[:300]}")
         return data
-    raise VeoError("unreachable")
+    raise VeoError(f"Veo API rate-limited after {8 * 30}s of backoff: {last}")
 
 
 def submit_video(prompt: str) -> str:
