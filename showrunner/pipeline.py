@@ -79,7 +79,17 @@ def produce_episode(premise: str, language: str = "en",
               shot=scene["shot_prompt"], line=scene["line"])
 
         video_path = ep_dir / f"scene{sid}.mp4"
-        qc.await_video(video_tasks[sid], video_path)
+        try:
+            qc.await_video(video_tasks[sid], video_path)
+        except qc.QwenError as exc:
+            # a free-chain wan shot failed or timed out in the render queue —
+            # re-render just this shot on Veo instead of killing the episode
+            if config.VIDEO_BACKEND == "qwen":
+                raise
+            _emit(on_event, "video_retry", id=sid, reason=str(exc)[:120])
+            from . import veo_client
+            veo_client.await_video(veo_client.submit_video(scene["shot_prompt"]),
+                                   video_path)
         _emit(on_event, "video_done", id=sid, file=str(video_path))
 
         voice_path = ep_dir / f"scene{sid}.wav"
