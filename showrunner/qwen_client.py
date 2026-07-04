@@ -156,11 +156,28 @@ def submit_video(prompt: str, size: str | None = None,
     Submitting every shot up-front lets Wan render them in parallel — a
     10-shot episode takes roughly one shot's wall-clock time, not ten.
     """
-    return _submit_async(
-        "services/aigc/video-generation/video-synthesis",
-        model or config.MODELS["video"],
-        {"prompt": prompt},
-        {"size": size or config.VIDEO_SIZE},
+    chain = [model or config.MODELS["video"]]
+    for m in config.VIDEO_FALLBACKS:
+        if m not in chain:
+            chain.append(m)
+    last: QwenError | None = None
+    for m in chain:
+        try:
+            return _submit_async(
+                "services/aigc/video-generation/video-synthesis",
+                m,
+                {"prompt": prompt},
+                {"size": size or config.VIDEO_SIZE},
+            )
+        except QwenError as exc:
+            # this model's free video seconds are gone — fall through to the next
+            if "AllocationQuota" in str(exc):
+                last = exc
+                continue
+            raise
+    raise QwenError(
+        "every video model in the fallback chain is out of free quota — "
+        f"redeem the hackathon coupon or wait for a reset. Last: {last}"
     )
 
 
