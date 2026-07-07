@@ -10,6 +10,11 @@ roughly the wall-clock time of one shot.
 Built for the **Global AI Hackathon Series with Qwen Cloud → AI Showrunner track**.
 Runs entirely on the Qwen Cloud free tier (Alibaba Cloud Model Studio), card-free.
 
+> **Video backends:** the hackathon build renders every shot with **Wan** on Qwen
+> Cloud — `SHOWRUNNER_VIDEO_BACKEND=qwen`, the `.env.example` default; the demo
+> episode was produced this way. An optional Google Veo backend was added after
+> the hackathon build for daily-episode experiments (`auto` / `veo` modes).
+
 ---
 
 ## Why
