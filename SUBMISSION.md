@@ -93,5 +93,5 @@ run, in about a minute, at near-zero marginal cost.
 ## 🔗 Links
 
 - **Code:** https://github.com/64johnlee/qwen-showrunner
-- **Demo video:** _(add URL)_
+- **Demo video:** https://youtu.be/k0tEHBi3bJY
 - **Deployment proof:** see `docs/PROOF_OF_DEPLOYMENT.md` + Workbench screenshot
