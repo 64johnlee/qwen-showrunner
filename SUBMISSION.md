@@ -93,5 +93,6 @@ run, in about a minute, at near-zero marginal cost.
 ## 🔗 Links
 
 - **Code:** https://github.com/64johnlee/qwen-showrunner
-- **Demo video:** _(add URL)_
+- **Demo video:** https://youtube.com/shorts/nqahUC7aUhA
+- **Example episode (full 80s, CAST mode, zh spoken / en subs):** https://youtube.com/shorts/D3U50S_b4Wo
 - **Deployment proof:** see `docs/PROOF_OF_DEPLOYMENT.md` + Workbench screenshot
